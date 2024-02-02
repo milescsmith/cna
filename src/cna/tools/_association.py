@@ -12,9 +12,13 @@ from numba.typed import List
 from cna.tools._nam import _df_to_array, nam
 from cna.tools._stats import conditional_permutation, empirical_fdrs
 
+from cna.tools._out import select_output
 
-def _association(NAMsvd, M, r, y, batches, ks=None, Nnull=1000, force_permute_all=False,
-                    local_test=True, seed=None):
+def _association(NAMsvd, NAMresid, M, r, y, batches, ks=None, Nnull=1000, force_permute_all=False,
+                    local_test=True, seed=None, show_progress=False):
+    # output level
+    out = select_output(show_progress)
+    
     if seed is not None:
         np.random.seed(seed)
     if force_permute_all:
@@ -71,10 +75,11 @@ def _association(NAMsvd, M, r, y, batches, ks=None, Nnull=1000, force_permute_al
     ycond = M.dot(y)
     ycond /= ycond.std()
     yhat, beta = _reg(ycond, k)
+    _, fullbeta = _reg(ycond, n)
     r2_perpc = (beta / np.sqrt(ycond.dot(ycond)))**2
 
-    # get neighborhood scores with chosen model
-    ncorrs = (np.sqrt(sv[:k])*beta/n).dot(V[:,:k].T)
+    # get neighborhood coefficients
+    ncorrs = (y[:,None]*NAMresid).mean(axis=0)
 
     # compute final p-value using Nnull null f-test p-values
     y_: npt.ArrayLike = conditional_permutation(batches, y, Nnull)
@@ -87,13 +92,13 @@ def _association(NAMsvd, M, r, y, batches, ks=None, Nnull=1000, force_permute_al
     # get neighborhood fdrs if requested
     fdrs, fdr_5p_t, fdr_10p_t = None, None, None
     if local_test:
-        print("computing neighborhood-level FDRs")
+        print('computing neighborhood-level FDRs', file=out)
         Nnull = min(1000, Nnull)
         y_ = y_[:,:Nnull]
         ycond_ = M.dot(y_)
         ycond_ /= ycond_.std(axis=0)
         gamma_ = U[:,:k].T.dot(ycond_)
-        nullncorrs = np.abs(V[:,:k].dot(np.sqrt(sv[:k])[:,None]*(gamma_ / n)))
+        nullncorrs = np.abs(NAMresid.T.dot(ycond_) / n)
 
         maxcorr = np.abs(ncorrs).max()
         fdr_thresholds = np.arange(maxcorr/4, maxcorr, maxcorr/400)
@@ -126,9 +131,11 @@ def _association(NAMsvd, M, r, y, batches, ks=None, Nnull=1000, force_permute_al
     return res
     # return Namespace(**res)
 
-def association(data, y, batches=None, covs=None, nsteps=None, suffix="",
-    force_recompute=False, **kwargs):
-
+def association(data, y, batches=None, covs=None, nsteps=None, suffix='',
+    force_recompute=False, show_progress=False, allow_low_sample_size=False, **kwargs):
+    # output level
+    out = select_output(show_progress)
+    
     # formatting and error checking
     if batches is None:
         batches = np.ones(data.N)
@@ -137,7 +144,15 @@ def association(data, y, batches=None, covs=None, nsteps=None, suffix="",
     y = _df_to_array(data, y)
     if y.shape != (data.N,):
         raise ValueError(
-            "y should be an array of length data.N; instead its shape is: "+str(y.shape))
+            'y should be an array of length data.N; instead its shape is: '+str(y.shape))
+    if data.N < 10 and not allow_low_sample_size:
+        raise ValueError(
+            'Dataset has fewer than 10 samples. CNA may have poor power at low sample sizes '+\
+            'because its null distribution is one in which each sample\'s single-cell profile '+\
+            'is unchanged but the sample labels are randomly assigned. If you want to run CNA '+\
+            'at this sample size despite the possibility of low power, you can do so by '+\
+            'invoking the association(...) function with the argument '+\
+            'allow_low_sample_size=True.')
 
     if covs is not None:
         filter_samples = ~(np.isnan(y) | np.any(np.isnan(covs), axis=1))
@@ -146,18 +161,20 @@ def association(data, y, batches=None, covs=None, nsteps=None, suffix="",
 
     du = data.uns
     nam(data, batches=batches, covs=covs, filter_samples=filter_samples,
-                    nsteps=nsteps, suffix=suffix,
-                    force_recompute=force_recompute, **kwargs)
+                    nsteps=nsteps, suffix=suffix, force_recompute=force_recompute,
+                    show_progress=show_progress,
+                    **kwargs)
     NAMsvd = (
         du["NAM_sampleXpc"+suffix].values,
         du["NAM_svs"+suffix],
         du["NAM_nbhdXpc"+suffix].values
         )
 
-    print("performing association test")
-    res = _association(NAMsvd, du["_M"+suffix], du["_r"+suffix],
-        y[du["_filter_samples"+suffix]], batches[du["_filter_samples"+suffix]],
-        **kwargs)
+
+    print('performing association test', file=out)
+    res = _association(NAMsvd, du['NAM_resid.T'+suffix].T, du['_M'+suffix], du['_r'+suffix],
+        y[du['_filter_samples'+suffix]], batches[du['_filter_samples'+suffix]],
+        show_progress=show_progress, **kwargs)
 
     # add info about kept cells
     vars(res)["kept"] = du["keptcells"+suffix]
