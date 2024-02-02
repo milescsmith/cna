@@ -1,7 +1,9 @@
 import numpy as np
+import numpy.typing as npt
 import scipy.stats as st
 
-def conditional_permutation(B, Y, num):
+
+def conditional_permutation(B: npt.ArrayLike, Y: npt.ArrayLike, num: int) -> npt.ArrayLike:
     """
     Permutes Y conditioned on B num different times.
     """
@@ -14,7 +16,7 @@ def conditional_permutation(B, Y, num):
         ])
     bix = np.zeros((len(Y), num)).astype(np.int)
     bix[np.concatenate(batchind)] = ix
-    result = Y[bix]
+    Y[bix]
     return Y[bix]
 
 def tail_counts(z, znull, atol=1e-8, rtol=1e-5):
@@ -54,7 +56,7 @@ def empirical_fdrs(z, znull, thresholds):
     """
     # get tail counts
     if znull.shape[0] != len(z):
-        print('ERROR: znull is shape', znull.shape, 'and z is shape', z.shape)
+        print("ERROR: znull is shape", znull.shape, "and z is shape", z.shape)
     tails = tail_counts(thresholds, znull)
     ranks = tail_counts(thresholds, z)
 

@@ -1,10 +1,17 @@
-import numpy as np
-import pandas as pd
-import scipy.stats as st
-import gc, warnings
+import gc
+import warnings
 from argparse import Namespace
-from ._stats import conditional_permutation, empirical_fdrs
-from ._nam import nam, _df_to_array
+
+import numpy as np
+import numpy.typing as npt
+import pandas as pd
+from scipy.stats import f as f_test
+from numba import jit, float64, int64
+from numba.typed import List
+
+from cna.tools._nam import _df_to_array, nam
+from cna.tools._stats import conditional_permutation, empirical_fdrs
+
 
 def _association(NAMsvd, M, r, y, batches, ks=None, Nnull=1000, force_permute_all=False,
                     local_test=True, seed=None):
@@ -23,22 +30,25 @@ def _association(NAMsvd, M, r, y, batches, ks=None, Nnull=1000, force_permute_al
         maxnpcs = min(4*incr, int(n/5))
         ks = np.arange(incr, maxnpcs+1, incr)
 
+    @jit(nopython=True)
     def _reg(q, k):
         Xpc = U[:,:k]
         beta = Xpc.T.dot(q) #Xpc.T.dot(Xpc) = I so no need to compute it
         qhat = Xpc.dot(beta)
         return qhat, beta
 
+    @jit(nopython=True)
     def _stats(yhat, ycond, k):
         ssefull = (yhat - ycond).dot(yhat - ycond)
         ssered = ycond.dot(ycond)
         deltasse =  ssered - ssefull
         f = (deltasse / k) / (ssefull/n)
-        p = st.f.sf(f, k, n-(1+r+k)) # F test
+        p = f_test(f, k, n-(1+r+k)) # F test
         r2 = 1 - ssefull/ssered
         return p, r2
 
-    def _minp_stats(z):
+    @jit((int64, float64, int64)(List(float64)), nopython=True)
+    def _minp_stats(z: np.ndarray) -> tuple[np.int64, np.float64, np.float64]:
         zcond = M.dot(z)
         zcond = zcond / zcond.std()
         ps, r2s = np.array([
@@ -54,7 +64,7 @@ def _association(NAMsvd, M, r, y, batches, ks=None, Nnull=1000, force_permute_al
     # get non-null f-test p-value
     k, p, r2 = _minp_stats(y)
     if k == max(ks):
-        warnings.warn(('data supported use of {} NAM PCs, which is the maximum considered. '+\
+        warnings.warn(("data supported use of {} NAM PCs, which is the maximum considered. "+\
             'Consider allowing more PCs by using the "ks" argument.').format(k))
 
     # compute coefficients and r2 with chosen model
@@ -67,17 +77,17 @@ def _association(NAMsvd, M, r, y, batches, ks=None, Nnull=1000, force_permute_al
     ncorrs = (np.sqrt(sv[:k])*beta/n).dot(V[:,:k].T)
 
     # compute final p-value using Nnull null f-test p-values
-    y_ = conditional_permutation(batches, y, Nnull)
+    y_: npt.ArrayLike = conditional_permutation(batches, y, Nnull)
     nullminps, nullr2s = np.array([_minp_stats(y__)[1:] for y__ in y_.T]).T
     pfinal = ((nullminps <= p+1e-8).sum() + 1)/(Nnull + 1)
     if (nullminps <= p+1e-8).sum() == 0:
-        warnings.warn('global association p-value attained minimal possible value. '+\
-                'Consider increasing Nnull')
+        warnings.warn("global association p-value attained minimal possible value. "+\
+                "Consider increasing Nnull")
 
     # get neighborhood fdrs if requested
     fdrs, fdr_5p_t, fdr_10p_t = None, None, None
     if local_test:
-        print('computing neighborhood-level FDRs')
+        print("computing neighborhood-level FDRs")
         Nnull = min(1000, Nnull)
         y_ = y_[:,:Nnull]
         ycond_ = M.dot(y_)
@@ -90,9 +100,9 @@ def _association(NAMsvd, M, r, y, batches, ks=None, Nnull=1000, force_permute_al
         fdr_vals = empirical_fdrs(ncorrs, nullncorrs, fdr_thresholds)
 
         fdrs = pd.DataFrame({
-            'threshold':fdr_thresholds,
-            'fdr':fdr_vals,
-            'num_detected': [(np.abs(ncorrs)>t).sum() for t in fdr_thresholds]})
+            "threshold":fdr_thresholds,
+            "fdr":fdr_vals,
+            "num_detected": [(np.abs(ncorrs)>t).sum() for t in fdr_thresholds]})
 
         # find maximal FDR<5% and FDR<10% sets
         if np.min(fdrs.fdr)>0.05:
@@ -104,18 +114,19 @@ def _association(NAMsvd, M, r, y, batches, ks=None, Nnull=1000, force_permute_al
         else:
             fdr_10p_t = fdrs[fdrs.fdr <= 0.1].iloc[0].threshold
 
-        del gamma_, nullncorrs
+        # del gamma_, nullncorrs
 
-    del y_
+    # del y_
 
-    res = {'p':pfinal, 'nullminps':nullminps, 'k':k, 'ncorrs':ncorrs, 'fdrs':fdrs,
-            'fdr_5p_t':fdr_5p_t, 'fdr_10p_t':fdr_10p_t,
-			'yresid_hat':yhat, 'yresid':ycond, 'ks':ks, 'beta':beta,
-            'r2':r2, 'r2_perpc':r2_perpc,
-            'nullr2_mean':nullr2s.mean(), 'nullr2_std':nullr2s.std()}
-    return Namespace(**res)
+    res = {"p":pfinal, "nullminps":nullminps, "k":k, "ncorrs":ncorrs, "fdrs":fdrs,
+            "fdr_5p_t":fdr_5p_t, "fdr_10p_t":fdr_10p_t,
+			"yresid_hat":yhat, "yresid":ycond, "ks":ks, "beta":beta,
+            "r2":r2, "r2_perpc":r2_perpc,
+            "nullr2_mean":nullr2s.mean(), "nullr2_std":nullr2s.std()}
+    return res
+    # return Namespace(**res)
 
-def association(data, y, batches=None, covs=None, nsteps=None, suffix='',
+def association(data, y, batches=None, covs=None, nsteps=None, suffix="",
     force_recompute=False, **kwargs):
 
     # formatting and error checking
@@ -126,7 +137,7 @@ def association(data, y, batches=None, covs=None, nsteps=None, suffix='',
     y = _df_to_array(data, y)
     if y.shape != (data.N,):
         raise ValueError(
-            'y should be an array of length data.N; instead its shape is: '+str(y.shape))
+            "y should be an array of length data.N; instead its shape is: "+str(y.shape))
 
     if covs is not None:
         filter_samples = ~(np.isnan(y) | np.any(np.isnan(covs), axis=1))
@@ -138,17 +149,17 @@ def association(data, y, batches=None, covs=None, nsteps=None, suffix='',
                     nsteps=nsteps, suffix=suffix,
                     force_recompute=force_recompute, **kwargs)
     NAMsvd = (
-        du['NAM_sampleXpc'+suffix].values,
-        du['NAM_svs'+suffix],
-        du['NAM_nbhdXpc'+suffix].values
+        du["NAM_sampleXpc"+suffix].values,
+        du["NAM_svs"+suffix],
+        du["NAM_nbhdXpc"+suffix].values
         )
 
-    print('performing association test')
-    res = _association(NAMsvd, du['_M'+suffix], du['_r'+suffix],
-        y[du['_filter_samples'+suffix]], batches[du['_filter_samples'+suffix]],
+    print("performing association test")
+    res = _association(NAMsvd, du["_M"+suffix], du["_r"+suffix],
+        y[du["_filter_samples"+suffix]], batches[du["_filter_samples"+suffix]],
         **kwargs)
 
     # add info about kept cells
-    vars(res)['kept'] = du['keptcells'+suffix]
+    vars(res)["kept"] = du["keptcells"+suffix]
 
     return res
