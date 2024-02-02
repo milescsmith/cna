@@ -20,18 +20,24 @@ def umap_ncorr(data, res, fdr_thresh=None, **kwargs):
 
     umap_overlay(data, ix1, c, **kwargs)
 
-def umap_overlay(data, ix1, c,
-    scatter0={},
-    scatter1={},
-    ax=None, noframe=True, colorbar=True, **cbar_kw):
 
+def umap_overlay(data, ix1, c, scatter0=None, scatter1=None, ax=None, noframe=True, colorbar=True, **cbar_kw):
     # set default plotting options
-    scatter0_ = {"alpha":0.1, "s":2, "color":"grey"}
-    scatter1_ = {"alpha":0.2, "s":8, "c":c, "cmap":"seismic",
-                    "vmin":-np.abs(c).max() if len(c) > 0 else 0,
-                    "vmax":np.abs(c).max() if len(c) > 0 else 1}
-    scatter0_.update(scatter0)
-    scatter1_.update(scatter1)
+    if scatter1 is None:
+        scatter1 = {}
+    if scatter0 is None:
+        scatter0 = {}
+    scatter0_ = {"alpha": 0.1, "s": 2, "color": "grey"}
+    scatter1_ = {
+        "alpha": 0.2,
+        "s": 8,
+        "c": c,
+        "cmap": "seismic",
+        "vmin": -np.abs(c).max() if len(c) > 0 else 0,
+        "vmax": np.abs(c).max() if len(c) > 0 else 1,
+    }
+    scatter0_ |= scatter0
+    scatter1_ |= scatter1
 
     if ax is None:
         ax = plt.gca()
@@ -41,7 +47,8 @@ def umap_overlay(data, ix1, c,
     res = ax.scatter(*data.obsm["X_umap"][ix1].T, **scatter1_)
 
     # remove ticks and spines
-    ax.set_xticks([]); ax.set_yticks([])
+    ax.set_xticks([])
+    ax.set_yticks([])
     if noframe:
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
