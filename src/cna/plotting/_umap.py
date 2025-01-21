@@ -1,6 +1,5 @@
 import matplotlib.pyplot as plt
 import numpy as np
-import pandas as pd
 
 
 def umap_ncorr(data, res, fdr_thresh=None, **kwargs):

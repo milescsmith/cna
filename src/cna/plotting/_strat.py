@@ -2,7 +2,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.patches import PathPatch
 from matplotlib.path import Path
-from mpl_toolkits.axes_grid1.axes_divider import make_axes_locatable
 
 
 # build violin plot that stratifies neighborhood coefficients by a discretization of the data

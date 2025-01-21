@@ -12,7 +12,7 @@ from cna.tools._out import select_output
 
 def get_connectivity(data):
     av = anndata.__version__
-    if type(av) == str:
+    if isinstance(av, str):
         av = version.parse(av)
     if av < version.parse("0.7.2"):
         return data.uns["neighbors"]["connectivities"]
@@ -37,7 +37,7 @@ def diffuse_stepwise(data, s, maxnsteps=15, show_progress=False):
 
 
 def diffuse(data, s, nsteps, show_progress=False):
-    for s in diffuse_stepwise(data, s, maxnsteps=nsteps, show_progress=show_progress):
+    for _ in diffuse_stepwise(data, s, maxnsteps=nsteps, show_progress=show_progress):
         pass
     return s
 
@@ -93,7 +93,7 @@ def _qc_nam(NAM, batches, show_progress=False):
 
     len(NAM)
     if len(np.unique(batches)) == 1:
-        warnings.warn("only one unique batch supplied to qc")
+        warnings.warn("only one unique batch supplied to qc", stacklevel=2)
         keep = np.repeat(True, len(NAM.T))
         return NAM, keep
 
@@ -118,7 +118,7 @@ def _resid_nam(NAM, covs, batches, ridge=None, show_progress=False):
         covs = (covs - covs.mean(axis=0)) / covs.std(axis=0)
 
     if batches is None or len(np.unique(batches)) == 1:
-        warnings.warn("only one unique batch supplied to prep")
+        warnings.warn("only one unique batch supplied to prep", stacklevel=2)
         C = covs
         if len(C.T) == 0:
             M = np.eye(N)
@@ -135,14 +135,14 @@ def _resid_nam(NAM, covs, batches, ridge=None, show_progress=False):
         else:
             ridges = [1e5, 1e4, 1e3, 1e2, 1e1, 1e0, 1e-1, 1e-2, 1e-3, 1e-4, 0]
 
-        for ridge in ridges:
+        for r in ridges:
             L = np.diag([1] * len(B.T) + [0] * (len(C.T) - len(B.T)))
-            M = np.eye(N) - C.dot(np.linalg.solve(C.T.dot(C) + ridge * len(C) * L, C.T))
+            M = np.eye(N) - C.dot(np.linalg.solve(C.T.dot(C) + r * len(C) * L, C.T))
             NAM_ = M.dot(NAM_)
 
             kurtoses = _batch_kurtosis(NAM_, batches)
 
-            print("\twith ridge", ridge, "median batch kurtosis = ", np.median(kurtoses), file=out)
+            print("\twith ridge", r, "median batch kurtosis = ", np.median(kurtoses), file=out)
 
             if np.median(kurtoses) <= 6:
                 break
@@ -227,14 +227,14 @@ def nam(
         du["NAM_sampleXpc" + suffix] = pd.DataFrame(
             U,
             index=NAM.index,
-            columns=[f"PC{str(i)}" for i in range(1, len(U.T) + 1)],
+            columns=[f"PC{i!s}" for i in range(1, len(U.T) + 1)],
         )
         du["NAM_svs" + suffix] = svs
         du["NAM_varexp" + suffix] = svs / len(U) / len(V)
         du["NAM_nbhdXpc" + suffix] = pd.DataFrame(
             V[:, :npcs],
             index=NAM.columns,
-            columns=[f"PC{str(i)}" for i in range(1, npcs + 1)],
+            columns=[f"PC{i!s}" for i in range(1, npcs + 1)],
         )
         du["_M" + suffix] = M
         du["_r" + suffix] = r

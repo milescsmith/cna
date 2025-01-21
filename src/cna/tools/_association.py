@@ -1,15 +1,12 @@
-import gc
 import warnings
-from argparse import Namespace
 
+import multianndata as mad
 import numpy as np
 import numpy.typing as npt
 import pandas as pd
 from numba import float64, int64, jit
 from numba.typed import List
 from scipy.stats import f as f_test
-
-import multianndata as mad
 
 from cna.tools._nam import _df_to_array, nam
 from cna.tools._out import select_output
@@ -28,7 +25,7 @@ def _association(
     force_permute_all: bool = False,
     local_test: bool = True,
     seed: int | None = None,
-    show_progress: bool= False,
+    show_progress: bool = False,
 ):
     # output level
     out = select_output(show_progress)
@@ -78,9 +75,10 @@ def _association(
     if k == max(ks):
         warnings.warn(
             (
-                "data supported use of {} NAM PCs, which is the maximum considered. "
-                + 'Consider allowing more PCs by using the "ks" argument.'
-            ).format(k)
+                f"data supported use of {k} NAM PCs, which is the maximum considered. "
+                'Consider allowing more PCs by using the "ks" argument.'
+            ),
+            stacklevel=2,
         )
 
     # compute coefficients and r2 with chosen model
@@ -98,7 +96,9 @@ def _association(
     nullminps, nullr2s = np.array([_minp_stats(y__)[1:] for y__ in y_.T]).T
     pfinal = ((nullminps <= p + 1e-8).sum() + 1) / (Nnull + 1)
     if (nullminps <= p + 1e-8).sum() == 0:
-        warnings.warn("global association p-value attained minimal possible value. " + "Consider increasing Nnull")
+        warnings.warn(
+            "global association p-value attained minimal possible value. Consider increasing Nnull", stacklevel=2
+        )
 
     # get neighborhood fdrs if requested
     fdrs, fdr_5p_t, fdr_10p_t = None, None, None
@@ -180,18 +180,18 @@ def association(
     batches = _df_to_array(data, batches)
     y = _df_to_array(data, y)
     if y.shape != (data.N,):
-        raise ValueError(
-            f"y should be an array of length data.N; instead its shape is: {str(y.shape)}"
-        )
+        msg = f"y should be an array of length data.N; instead its shape is: {y.shape!s}"
+        raise ValueError(msg)
     if data.N < 10 and not allow_low_sample_size:
-        raise ValueError(
+        msg = (
             "Dataset has fewer than 10 samples. CNA may have poor power at low sample sizes "
-            + "because its null distribution is one in which each sample\'s single-cell profile "
-            + "is unchanged but the sample labels are randomly assigned. If you want to run CNA "
-            + "at this sample size despite the possibility of low power, you can do so by "
-            + "invoking the association(...) function with the argument "
-            + "allow_low_sample_size=True."
+            "because its null distribution is one in which each sample's single-cell profile "
+            "is unchanged but the sample labels are randomly assigned. If you want to run CNA "
+            "at this sample size despite the possibility of low power, you can do so by "
+            "invoking the association(...) function with the argument "
+            "allow_low_sample_size=True."
         )
+        raise ValueError(msg)
 
     if covs is not None:
         filter_samples = ~(np.isnan(y) | np.any(np.isnan(covs), axis=1))
