@@ -1,1 +1,1 @@
-from ._knn import knn
+from cna.preprocessing._knn import knn
