@@ -5,7 +5,7 @@
 groups = ["default"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:153e746b5c31918902ce2fc68630f2d84ab469cff31f3c933d427895e5aafa94"
+content_hash = "sha256:c5d8d362cf4d667daf0970c947444d12fd4c56e51ba7e917fb0811fbb488cc3b"
 
 [[metadata.targets]]
 requires_python = ">=3.12"
@@ -29,16 +29,6 @@ dependencies = [
 files = [
     {file = "anndata-0.11.3-py3-none-any.whl", hash = "sha256:2ce220c4c03b7dba31fab0540d3d64f6811bc343cd3f273d7bdeed50a5cd6367"},
     {file = "anndata-0.11.3.tar.gz", hash = "sha256:986e626b62108e8db7034db2f391fd160c11d4b4e3af9c31183c82862297f7f6"},
-]
-
-[[package]]
-name = "argparse"
-version = "1.4.0"
-summary = "Python command-line parsing library"
-groups = ["default"]
-files = [
-    {file = "argparse-1.4.0-py2.py3-none-any.whl", hash = "sha256:c31647edb69fd3d465a847ea3157d37bed1f95f19760b11a47aa91c04b666314"},
-    {file = "argparse-1.4.0.tar.gz", hash = "sha256:62b089a55be1d8949cd2bc7e0df0bddb9e028faefc8c32038cc84862aefdd6e4"},
 ]
 
 [[package]]
