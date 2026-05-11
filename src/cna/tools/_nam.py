@@ -145,15 +145,16 @@ def _resid_nam(NAM, covs, batches, ridges=None, npcs=None, show_progress=False):
             L = np.diag([1]*len(B.T)+[0]*(len(C.T)-len(B.T)))
             M = np.eye(N) - C.dot(np.linalg.solve(C.T.dot(C) + ridge*len(C)*L, C.T))
             M.columns = M.index
-            NAM_ = M.dot(NAM_)
+            tempNAM = M.dot(NAM_)
 
-            kurtoses = _batch_kurtosis(NAM_, batches)
+            kurtoses = _batch_kurtosis(tempNAM, batches)
 
             print('\twith ridge', ridge, 'median batch kurtosis = ',
                     np.median(kurtoses), file=out)
 
             if np.median(kurtoses) <= 6:
                 break
+        NAM_ = tempNAM
 
     # standardize NAM
     NAM_ = NAM_ / NAM_.std(axis=0)

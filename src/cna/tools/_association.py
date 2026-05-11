@@ -227,7 +227,7 @@ def association(data, y, sid_name, batches=None, covs=None, donorids=None, ks=No
     # store results at the neighborhood level
     if key_added in data.obs:
         warnings.warn(f"Key '{key_added}' already exists in data.obs. Overwriting.")
-    data.obs[key_added] = np.NaN
+    data.obs[key_added] = np.nan
     data.obs.loc[kept, key_added] = res.ncorrs
     
     # compute local FDRs
