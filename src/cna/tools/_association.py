@@ -42,7 +42,7 @@ def _association(NAMsvd, NAMresid, M, r, y, batches, donorids, ks=None, Nnull=10
         ssefull = (yhat - ycond).dot(yhat - ycond)
         ssered = ycond.dot(ycond)
         deltasse =  ssered - ssefull
-        f = (deltasse / k) / (ssefull/n)
+        f = (deltasse / k) / (ssefull/(n-(1+r+k)))
         p = st.f.sf(f, k, n-(1+r+k)) # F test
         r2 = 1 - ssefull/ssered
         return p, r2
@@ -74,7 +74,7 @@ def _association(NAMsvd, NAMresid, M, r, y, batches, donorids, ks=None, Nnull=10
     r2_perpc = (beta / np.sqrt(ycond.dot(ycond)))**2
 
     # get neighborhood coefficients
-    ncorrs = (y[:,None]*NAMresid).mean(axis=0)
+    ncorrs = (ycond[:,None]*NAMresid).mean(axis=0)
 
     # compute final p-value using Nnull null f-test p-values
     if donorids is not None:
