@@ -74,6 +74,8 @@ def _association(NAMsvd, NAMresid, M, r, y, batches, donorids, ks=None, Nnull=10
     r2_perpc = (beta / np.sqrt(ycond.dot(ycond)))**2
 
     # get neighborhood coefficients
+	if isinstance(ycond, pd.DataFrame | pd.Series):
+		ycond = ycond.to_numpy()
     ncorrs = (ycond[:,None]*NAMresid).mean(axis=0)
 
     # compute final p-value using Nnull null f-test p-values
