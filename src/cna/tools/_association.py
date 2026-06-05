@@ -8,7 +8,6 @@ import scipy.stats as st
 from ._nam import _resid_nam, nam
 from ._out import select_output
 
-# from argparse import Namespace
 from ._stats import conditional_permutation, empirical_fdrs, grouplevel_permutation
 
 
@@ -140,6 +139,9 @@ def _association(
 
     del y_
 
+    # probably going to bite me in the ass
+    # but I don't understand wrapping this in a Namespace object here -
+    # what does this add that a dict wouldn't?
     res = {
         "p": pfinal,
         "nullminps": nullminps,
@@ -157,7 +159,7 @@ def _association(
         "nullr2_mean": nullr2s.mean(),
         "nullr2_std": nullr2s.std(),
     }
-    return Namespace(**res)
+    return res #Namespace(**res)
 
 
 def check_inputs(data, y, sid_name, batches, covs, donorids, allow_low_sample_size):
@@ -260,6 +262,27 @@ def association(
     ridges=None,
     **kwargs,
 ):
+    """
+    Parameters
+    ----------
+    data : :class:`ad.AnnData`
+    y : 
+    sid_name : str
+    batches : pd.Series | list[int], default=None
+    covs : pd.Series | list[int], default=None
+    donorids : , default=None
+    ks: int, default=None
+    key_added : str, default="coef"
+    max_frac_pcs : float, default=0.15
+    nsteps=None
+    show_progress: bool, default=False
+    allow_low_sample_size: bool, default=False
+    return_full: bool, default=False
+    ridges , default=None
+
+    Returns
+    -------
+    """
     out = select_output(show_progress)
 
     # Check formats of inputs and figure out which samples have valid data
@@ -295,9 +318,10 @@ def association(
         ks=ks,
         **kwargs,
     )
-    res.__dict__.update(vars(res_))  # add info from from res_ to res
-    res.nam = NAM
-    res.kept = kept
+    res = {**res, **res_} # add info from from res_ to res
+    # res.__dict__.update(vars(res_))  # add info from from res_ to res
+    res["nam"] = NAM
+    res["kept"] = kept
 
     # store results at the neighborhood level
     if key_added in data.obs:
@@ -307,12 +331,14 @@ def association(
 
     # compute local FDRs
     def min_fdr_for_corr(ncorr):
-        matching_fdrs = res.fdrs.loc[res.fdrs.threshold <= abs(ncorr)].fdr
+        matching_fdrs = res["fdrs"].loc[res["fdrs"]["threshold"] <= abs(ncorr)]["fdr"]
         return matching_fdrs.min() if not matching_fdrs.empty else 1
 
     data.obs[f"{key_added}_fdr"] = data.obs[key_added].apply(min_fdr_for_corr)
 
+    res["fdr"] = data.obs[f"{key_added}_fdr"]
+
     if return_full:
         return res
     else:
-        return res.p
+        return res["p"]

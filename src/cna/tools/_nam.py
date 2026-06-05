@@ -1,6 +1,7 @@
 import gc
-from argparse import Namespace
+# from argparse import Namespace
 from importlib import metadata
+from typing import Any
 
 import anndata
 import numpy as np
@@ -115,7 +116,7 @@ def svd_nam(NAM):
 
 
 # residualizes covariates and batch information out of NAM
-def _resid_nam(NAM, covs, batches, ridges=None, npcs=None, show_progress=False):
+def _resid_nam(NAM, covs, batches, ridges=None, npcs=None, show_progress=False) -> dict[str, Any]:
     out = select_output(show_progress)
 
     N = len(NAM)
@@ -165,14 +166,17 @@ def _resid_nam(NAM, covs, batches, ridges=None, npcs=None, show_progress=False):
         npcs = len(V.T)
 
     # store results
-    res = Namespace()
-    res.M = M
-    res.r = len(C.T)
-    res.namresid = NAM_
-    res.namresid_sampleXpc = U
-    res.namresid_nbhdXpc = V
-    res.namresid_svs = svs[:npcs]
-    res.namresid_varexp = svs / len(U) / len(V)
+    # res = Namespace()
+    res = {
+        "M": M
+        "r": len(C.T)
+        "namresid": NAM_
+        "namresid_sampleXpc": U
+        "namresid_nbhdXpc": V
+        "namresid_svs": svs[:npcs]
+        "namresid_varexp": svs / len(U) / len(V)
+
+    }
 
     return res
 

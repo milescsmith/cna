@@ -4,7 +4,7 @@ build-backend = "uv_build"
 
 [project]
 name = "cna"
-version = "0.2.5"
+version = "0.3.0"
 authors = [
     { name = "Yakir Reshef", email = "yreshef@broadinstitute.org" },
     { name = "Laurie Rumker", email = "lrumker@broadinstitute.org" }
