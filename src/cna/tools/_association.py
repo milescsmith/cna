@@ -304,7 +304,10 @@ def association(
 
     # residualize NAM
     N = filter_samples.sum()
-    npcs = min(N, max([10, int(max_frac_pcs * N), ks if ks is not None else []]))
+    if ks is None:
+        npcs = min(N, max([10, int(max_frac_pcs * N)]))
+    else:
+        npcs = min(N, max([10, int(max_frac_pcs * N), ks]))
     res = _resid_nam(
         NAM,
         covs[filter_samples] if covs is not None else covs,
