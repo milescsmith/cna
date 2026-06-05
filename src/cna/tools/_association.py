@@ -1,5 +1,4 @@
 import warnings
-from argparse import Namespace
 
 import numpy as np
 import pandas as pd
@@ -7,7 +6,6 @@ import scipy.stats as st
 
 from ._nam import _resid_nam, nam
 from ._out import select_output
-
 from ._stats import conditional_permutation, empirical_fdrs, grouplevel_permutation
 
 
@@ -46,8 +44,8 @@ def _association(
     if max(ks) + r >= n:
         msg = (
             "Maximum number of PCs plus number of covariates must be less than n-1. "
-             f"Currently it is {max(ks) + r} while n is {n}. Either reduce the number of covariates "
-             "or reduce the number of PCs to consider using the optional argument ks=[...]."
+            f"Currently it is {max(ks) + r} while n is {n}. Either reduce the number of covariates "
+            "or reduce the number of PCs to consider using the optional argument ks=[...]."
         )
         raise ValueError(msg)
 
@@ -77,8 +75,9 @@ def _association(
     k, p, r2 = _minp_stats(y)
     if k == max(ks):
         warnings.warn(
-                f"data supported use of {k} NAM PCs, which is the maximum considered. "
-                 'Consider allowing more PCs by using the "ks" argument.', stacklevel=2
+            f"data supported use of {k} NAM PCs, which is the maximum considered. "
+            'Consider allowing more PCs by using the "ks" argument.',
+            stacklevel=2,
         )
 
     # compute coefficients and r2 with chosen model
@@ -100,7 +99,9 @@ def _association(
     nullminps, nullr2s = np.array([_minp_stats(y__)[1:] for y__ in y_.T]).T
     pfinal = ((nullminps <= p + 1e-8).sum() + 1) / (Nnull + 1)
     if (nullminps <= p + 1e-8).sum() == 0:
-        warnings.warn("global association p-value attained minimal possible value. " + "Consider increasing Nnull", stacklevel=2)
+        warnings.warn(
+            "global association p-value attained minimal possible value. " + "Consider increasing Nnull", stacklevel=2
+        )
 
     # get neighborhood fdrs if requested
     fdrs, fdr_5p_t, fdr_10p_t = None, None, None
@@ -159,7 +160,7 @@ def _association(
         "nullr2_mean": nullr2s.mean(),
         "nullr2_std": nullr2s.std(),
     }
-    return res #Namespace(**res)
+    return res  # Namespace(**res)
 
 
 def check_inputs(data, y, sid_name, batches, covs, donorids, allow_low_sample_size):
@@ -183,10 +184,7 @@ def check_inputs(data, y, sid_name, batches, covs, donorids, allow_low_sample_si
 
     # Ensure batches and donorids not simultaneously set
     if batches is not None and donorids is not None:
-        msg = (
-            "We do not currently support conditioning on batch "
-             "while also accounting for multiple samples per donor"
-        )
+        msg = "We do not currently support conditioning on batch while also accounting for multiple samples per donor"
         raise ValueError(msg)
 
     if batches is None:
@@ -197,9 +195,9 @@ def check_inputs(data, y, sid_name, batches, covs, donorids, allow_low_sample_si
         if donorids is not None:
             print(
                 "WARNING: We currently do not account for multiple samples per donor "
-                 "when conditioning on covariates. This conditioning may therefore account "
-                 "only incompletely for the covariates of interest. We expect this to make "
-                 "only minor differences in most cases, but we have not investigated it formally"
+                "when conditioning on covariates. This conditioning may therefore account "
+                "only incompletely for the covariates of interest. We expect this to make "
+                "only minor differences in most cases, but we have not investigated it formally"
             )
     else:
         filter_samples = ~np.isnan(y) & y.index.isin(data.obs[sid_name].unique())
@@ -208,15 +206,13 @@ def check_inputs(data, y, sid_name, batches, covs, donorids, allow_low_sample_si
     if N < 10 and not allow_low_sample_size:
         msg = (
             "You are supplying phenotype information on fewer than 10 samples. This may lead to "
-             "poor power at low sample sizes because our null distribution is one in which each "
-             "sample's single-cell profile is unchanged but the sample labels are randomly "
-             "assigned. If you want to run an analysis at this sample size despite the possibility of low "
-             "power, you can do so by invoking the association(...) function with the argument "
-             "allow_low_sample_size=True."
+            "poor power at low sample sizes because our null distribution is one in which each "
+            "sample's single-cell profile is unchanged but the sample labels are randomly "
+            "assigned. If you want to run an analysis at this sample size despite the possibility of low "
+            "power, you can do so by invoking the association(...) function with the argument "
+            "allow_low_sample_size=True."
         )
-        raise ValueError(
-            msg
-        )
+        raise ValueError(msg)
 
     return batches, filter_samples
 
@@ -266,7 +262,7 @@ def association(
     Parameters
     ----------
     data : :class:`ad.AnnData`
-    y : 
+    y :
     sid_name : str
     batches : pd.Series | list[int], default=None
     covs : pd.Series | list[int], default=None
@@ -318,7 +314,7 @@ def association(
         ks=ks,
         **kwargs,
     )
-    res = {**res, **res_} # add info from from res_ to res
+    res = {**res, **res_}  # add info from from res_ to res
     # res.__dict__.update(vars(res_))  # add info from from res_ to res
     res["nam"] = NAM
     res["kept"] = kept

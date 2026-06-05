@@ -1,4 +1,5 @@
 import gc
+
 # from argparse import Namespace
 from importlib import metadata
 from typing import Any
@@ -168,14 +169,13 @@ def _resid_nam(NAM, covs, batches, ridges=None, npcs=None, show_progress=False) 
     # store results
     # res = Namespace()
     res = {
-        "M": M
-        "r": len(C.T)
-        "namresid": NAM_
-        "namresid_sampleXpc": U
-        "namresid_nbhdXpc": V
-        "namresid_svs": svs[:npcs]
-        "namresid_varexp": svs / len(U) / len(V)
-
+        "M": M,
+        "r": len(C.T),
+        "namresid": NAM_,
+        "namresid_sampleXpc": U,
+        "namresid_nbhdXpc": V,
+        "namresid_svs": svs[:npcs],
+        "namresid_varexp": svs / len(U) / len(V),
     }
 
     return res
