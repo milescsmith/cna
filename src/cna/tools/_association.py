@@ -303,10 +303,10 @@ def association(
 
     print("performing association test", file=out)
     res_ = _association(
-        (res.namresid_sampleXpc.values, res.namresid_svs.values, res.namresid_nbhdXpc.values),
-        res.namresid,
-        res.M,
-        res.r,
+        (res["namresid_sampleXpc"].values, res["namresid_svs"].values, res["namresid_nbhdXpc"].values),
+        res["namresid"],
+        res["M"],
+        res["r"],
         y[filter_samples].values,
         batches[filter_samples].values,
         donorids[filter_samples].values if donorids is not None else None,
@@ -323,7 +323,7 @@ def association(
     if key_added in data.obs:
         warnings.warn(f"Key '{key_added}' already exists in data.obs. Overwriting.", stacklevel=2)
     data.obs[key_added] = np.nan
-    data.obs.loc[kept, key_added] = res.ncorrs
+    data.obs.loc[kept, key_added] = res["ncorrs"]
 
     # compute local FDRs
     def min_fdr_for_corr(ncorr):
