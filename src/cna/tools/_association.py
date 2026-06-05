@@ -343,15 +343,16 @@ def association(
             data.obs.drop(columns=x, inplace=True)
 
     res["ncorrs"].name = key_added
-    data.obs = data.obs.merge(res["ncorrs"], left_index=True, right_index=True, how="left")
 
-    data.obs.insert(
-        loc=data.obs.shape[1],
-        column=f"{key_added}_fdr",
-        value=[min_fdr_for_corr(_, res["fdrs"]["fdr"].to_numpy(), res["fdrs"]["threshold"].to_numpy()) for _ in res["ncorrs"]]
+    fdr_res = pd.Series(
+        data=[min_fdr_for_corr(_, res["fdrs"]["fdr"].to_numpy(), res["fdrs"]["threshold"].to_numpy()) for _ in res["ncorrs"]],
+        index=res["ncorrs"].index,
+        name=f"{key_added}_fdr",
     )
-    data.obs[f"{key_added}"].fillna(value=1, inplace=True)
-    data.obs[f"{key_added}_fdr"].fillna(value=1, inplace=True)
+
+    data.obs = data.obs.join([res["ncorrs"], fdr_res], how="left")
+
+    data.obs.fillna(value={f"{key_added}": 1, f"{key_added}_fdr": 1}, inplace=True)
 
     res["fdr"] = data.obs[f"{key_added}_fdr"]
     res["fdr"].name = f"{key_added}_fdr"
