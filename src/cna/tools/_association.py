@@ -338,7 +338,10 @@ def association(
     # store results at the neighborhood level
     if key_added in data.obs:
         warnings.warn(f"Key '{key_added}' already exists in data.obs. Overwriting.", stacklevel=2)
-    data.obs[key_added] = np.nan
+    for x in [f"{key_added}", f"{key_added}_fdr"]:
+        if x in data.obs.columns:
+            data.obs.drop(columns=x, inplace=True)
+
     res["ncorrs"].name = key_added
     data.obs = data.obs.merge(res["ncorrs"], left_index=True, right_index=True, how="left")
 
@@ -347,6 +350,9 @@ def association(
         column=f"{key_added}_fdr",
         value=[min_fdr_for_corr(_, res["fdrs"]["fdr"].to_numpy(), res["fdrs"]["threshold"].to_numpy()) for _ in res["ncorrs"]]
     )
+    data.obs[f"{key_added}"].fillna(value=1, inplace=True)
+    data.obs[f"{key_added}_fdr"].fillna(value=1, inplace=True)
+
     res["fdr"] = data.obs[f"{key_added}_fdr"]
     res["fdr"].name = f"{key_added}_fdr"
 
