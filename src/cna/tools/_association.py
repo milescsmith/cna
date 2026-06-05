@@ -323,6 +323,7 @@ def association(
     if key_added in data.obs:
         warnings.warn(f"Key '{key_added}' already exists in data.obs. Overwriting.", stacklevel=2)
     data.obs[key_added] = np.nan
+    res["ncorrs"].name = key_added
     data.obs.loc[kept, key_added] = res["ncorrs"]
 
     # compute local FDRs
@@ -333,6 +334,7 @@ def association(
     data.obs[f"{key_added}_fdr"] = data.obs[key_added].apply(min_fdr_for_corr)
 
     res["fdr"] = data.obs[f"{key_added}_fdr"]
+    res["fdr"].name = f"{key_added}_fdr"
 
     if return_full:
         return res
