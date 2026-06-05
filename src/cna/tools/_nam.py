@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 import scipy.stats as st
 from packaging import version
+import anndata as ad
 
 from ._out import select_output
 
@@ -182,15 +183,15 @@ def _resid_nam(NAM, covs, batches, ridges=None, npcs=None, show_progress=False) 
 
 
 def nam(
-    data,
-    sid_name,
-    batches=None,
-    nsteps=None,
-    self_weight=1,
-    max_frac_pcs=0.15,
-    suffix="",
-    ks=None,
-    show_progress=False,
+    data: ad.AnnData,
+    sid_name: str,
+    batches: pd.DataFrame | None = None,
+    nsteps: int | None = None,
+    self_weight: int = 1,
+    max_frac_pcs: float = 0.15,
+    suffix: str = "",
+    ks: int | None = None,
+    show_progress: bool = False,
     **kwargs,
 ):
     out = select_output(show_progress)
@@ -201,7 +202,13 @@ def nam(
 
     # compute and QC NAM
     print("computing NAM", file=out)
-    NAM = _nam(data, sid_name, nsteps=nsteps, self_weight=self_weight, show_progress=show_progress)
+    NAM = _nam(
+        data=data,
+        sid_name=sid_name,
+        nsteps=nsteps,
+        self_weight=self_weight,
+        show_progress=show_progress
+    )
     NAMqc, keep = _qc_nam(NAM, batches, show_progress=show_progress)
 
     return pd.DataFrame(NAMqc, index=NAM.index, columns=NAM.columns[keep], dtype=float), keep

@@ -52,12 +52,13 @@ wheels = [
 
 [[package]]
 name = "cna"
-version = "0.3.1"
+version = "0.4.0"
 source = { editable = "." }
 dependencies = [
     { name = "anndata" },
     { name = "argparse" },
     { name = "matplotlib" },
+    { name = "numba" },
     { name = "numpy" },
     { name = "pandas" },
     { name = "scanpy" },
@@ -75,6 +76,7 @@ requires-dist = [
     { name = "anndata", specifier = ">=0.11" },
     { name = "argparse", specifier = ">=1.1" },
     { name = "matplotlib", specifier = ">=3.1.3" },
+    { name = "numba", specifier = ">=0.65.1" },
     { name = "numpy", specifier = ">=2.2,<2.5.0" },
     { name = "pandas", specifier = ">=2.3" },
     { name = "scanpy", specifier = ">=1.10" },

@@ -1,12 +1,14 @@
 import warnings
 
+import anndata as ad
 import numpy as np
 import pandas as pd
 import scipy.stats as st
+from numba import njit
 
-from ._nam import _resid_nam, nam
-from ._out import select_output
-from ._stats import conditional_permutation, empirical_fdrs, grouplevel_permutation
+from cna.tools._nam import _resid_nam, nam
+from cna.tools._out import select_output
+from cna.tools._stats import conditional_permutation, empirical_fdrs, grouplevel_permutation
 
 
 def _association(
@@ -41,6 +43,8 @@ def _association(
         incr = max(int(0.02 * n), 1)
         maxnpcs = max(min(4 * incr, int(n / 5)), 1)
         ks = np.arange(incr, maxnpcs + 1, incr)
+    elif isinstance(ks, int):
+        ks = [ks]
     if max(ks) + r >= n:
         msg = (
             "Maximum number of PCs plus number of covariates must be less than n-1. "
@@ -218,7 +222,16 @@ def check_inputs(data, y, sid_name, batches, covs, donorids, allow_low_sample_si
 
 
 def compute_nam_and_reindex(
-    data, y, sid_name, batches, covs, donorids, filter_samples, nsteps, show_progress, **kwargs
+    data: ad.AnnData,
+    y: pd.Series | list[float],
+    sid_name: str,
+    batches: pd.Series | list[float],
+    covs: pd.DataFrame,
+    donorids: None,
+    filter_samples: bool,
+    nsteps: int,
+    show_progress: bool,
+    **kwargs
 ):
     # compute NAM
     NAM, kept = nam(data, sid_name, batches=batches, nsteps=nsteps, show_progress=show_progress, **kwargs)
@@ -291,7 +304,7 @@ def association(
 
     # residualize NAM
     N = filter_samples.sum()
-    npcs = min(N, max([10] + [int(max_frac_pcs * N)] + [ks if ks is not None else []][0]))
+    npcs = min(N, max([10, int(max_frac_pcs * N), ks if ks is not None else []]))
     res = _resid_nam(
         NAM,
         covs[filter_samples] if covs is not None else covs,
@@ -324,15 +337,13 @@ def association(
         warnings.warn(f"Key '{key_added}' already exists in data.obs. Overwriting.", stacklevel=2)
     data.obs[key_added] = np.nan
     res["ncorrs"].name = key_added
-    data.obs.loc[kept, key_added] = res["ncorrs"]
+    data.obs = data.obs.merge(res["ncorrs"], left_index=True, right_index=True, how="left")
 
-    # compute local FDRs
-    def min_fdr_for_corr(ncorr):
-        matching_fdrs = res["fdrs"].loc[res["fdrs"]["threshold"] <= abs(ncorr)]["fdr"]
-        return matching_fdrs.min() if not matching_fdrs.empty else 1
-
-    data.obs[f"{key_added}_fdr"] = data.obs[key_added].apply(min_fdr_for_corr)
-
+    data.obs.insert(
+        loc=data.obs.shape[1],
+        column=f"{key_added}_fdr",
+        value=[min_fdr_for_corr(_, res["fdrs"]["fdr"].to_numpy(), res["fdrs"]["threshold"].to_numpy()) for _ in res["ncorrs"]]
+    )
     res["fdr"] = data.obs[f"{key_added}_fdr"]
     res["fdr"].name = f"{key_added}_fdr"
 
@@ -340,3 +351,9 @@ def association(
         return res
     else:
         return res["p"]
+
+# compute local FDRs
+@njit(parallel=True)
+def min_fdr_for_corr(ncorr, fdrs, thresholds):
+    matching_fdrs = fdrs[thresholds <= abs(ncorr)]
+    return float(np.min(matching_fdrs)) if len(matching_fdrs) > 0 else 1.0

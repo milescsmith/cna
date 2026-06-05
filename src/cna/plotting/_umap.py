@@ -40,16 +40,14 @@ def umap_overlay(data, mask, key, scatter0=None, scatter1=None, ax=None, *args, 
     if ax is None:
         ax = plt.gca()
     c = data.obs[mask][key]
-    scatter0_ = {"alpha": 0.8, "s": 2}
-    scatter1_ = {
+    scatter0 = {**scatter0, **{"alpha": 0.8, "s": 2}}
+    scatter1 = {**scatter1, **{
         "alpha": 0.9,
         "s": 8,
         "cmap": "seismic",
         "vmin": -np.abs(c).max() if len(c) > 0 else 0,
         "vmax": np.abs(c).max() if len(c) > 0 else 1,
-    }
-    scatter0_.update(scatter0)
-    scatter1_.update(scatter1)
+    }}
 
     # do plotting
     sc.pl.umap(data, ax=ax, show=False, **scatter0_)
