@@ -223,12 +223,12 @@ def check_inputs(data, y, sid_name, batches, covs, donorids, allow_low_sample_si
 
 def compute_nam_and_reindex(
     data: ad.AnnData,
-    y: pd.Series | list[float],
+    y: pd.Series,
     sid_name: str,
-    batches: pd.Series | list[float],
+    batches: pd.Series,
     covs: pd.DataFrame,
     donorids: None,
-    filter_samples: bool,
+    filter_samples: pd.Series,
     nsteps: int,
     show_progress: bool,
     **kwargs
@@ -269,6 +269,7 @@ def association(
     allow_low_sample_size=False,
     return_full=False,
     ridges=None,
+    add_to_adata: bool = True,
     **kwargs,
 ):
     """
@@ -350,14 +351,14 @@ def association(
         name=f"{key_added}_fdr",
     )
 
-    data.obs = data.obs.join([res["ncorrs"], fdr_res], how="left")
+    if add_to_adata:
+        data.obs = data.obs.join([res["ncorrs"], fdr_res], how="left")
+        data.obs.fillna(value={f"{key_added}": 1, f"{key_added}_fdr": 1}, inplace=True)
 
-    data.obs.fillna(value={f"{key_added}": 1, f"{key_added}_fdr": 1}, inplace=True)
-
-    res["fdr"] = data.obs[f"{key_added}_fdr"]
-    res["fdr"].name = f"{key_added}_fdr"
 
     if return_full:
+        res["fdr"] = fdr_res
+        res["fdr"].name = f"{key_added}_fdr"
         return res
     else:
         return res["p"]
