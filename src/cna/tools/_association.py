@@ -6,9 +6,8 @@ import pandas as pd
 import scipy.stats as st
 from numba import njit
 
-from cna.tools._nam import _resid_nam, nam
-from cna.tools._out import select_output
-from cna.tools._stats import conditional_permutation, empirical_fdrs, grouplevel_permutation
+from ._nam import _resid_nam, nam
+from ._stats import conditional_permutation, empirical_fdrs, grouplevel_permutation
 
 
 def _association(
@@ -24,11 +23,7 @@ def _association(
     force_permute_all=False,
     local_test=True,
     seed=None,
-    show_progress=False,
 ):
-    # output level
-    out = select_output(show_progress)
-
     if seed is not None:
         np.random.seed(seed)
     if force_permute_all:
@@ -110,7 +105,7 @@ def _association(
     # get neighborhood fdrs if requested
     fdrs, fdr_5p_t, fdr_10p_t = None, None, None
     if local_test:
-        print("computing neighborhood-level FDRs", file=out)
+        print("computing neighborhood-level FDRs")
         Nnull = min(1000, Nnull)
         y_ = y_[:, :Nnull]
         ycond_ = M.dot(y_)
@@ -144,9 +139,6 @@ def _association(
 
     del y_
 
-    # probably going to bite me in the ass
-    # but I don't understand wrapping this in a Namespace object here -
-    # what does this add that a dict wouldn't?
     res = {
         "p": pfinal,
         "nullminps": nullminps,
@@ -164,25 +156,38 @@ def _association(
         "nullr2_mean": nullr2s.mean(),
         "nullr2_std": nullr2s.std(),
     }
-    return res  # Namespace(**res)
+    return res
 
 
-def check_inputs(data, y, sid_name, batches, covs, donorids, allow_low_sample_size):
+def check_inputs(
+    adata: ad.AnnData,
+    y: pd.Series,
+    sid_name: str,
+    batches: pd.Series | None,
+    covs: pd.DataFrame | None,
+    donorids: pd.Series | None,
+    allow_low_sample_size: bool
+) -> tuple[pd.Series, pd.Series]:
     if not isinstance(y, pd.Series):
         msg = f"'y' must be a pandas Series, but got {type(y)}"
         raise TypeError(msg)
+
     if batches is not None and not isinstance(batches, pd.Series):
         msg = f"'batches' must be a pandas Series, but got {type(batches)}"
         raise TypeError(msg)
+
     if covs is not None and not isinstance(covs, pd.DataFrame):
         msg = f"'covs' must be a pandas DataFrame, but got {type(covs)}"
         raise TypeError(msg)
+
     if donorids is not None and not isinstance(donorids, pd.Series):
         msg = f"'donorids' must be a pandas Series, but got {type(donorids)}"
         raise TypeError(msg)
-    if not set(y.index).issubset(set(data.obs[sid_name])):
+
+    if not set(y.index).issubset(set(adata.obs[sid_name])):
         print("WARNING: index of 'y' contains values not present in 'data[sid_name]'. These samples will be ignored.")
-    if not set(data.obs[sid_name]).issubset(set(y.index)):
+
+    if not set(adata.obs[sid_name]).issubset(set(y.index)):
         msg = "'data[sid_name]' contains values not present in the index of 'y'."
         raise ValueError(msg)
 
@@ -195,7 +200,7 @@ def check_inputs(data, y, sid_name, batches, covs, donorids, allow_low_sample_si
         batches = pd.Series(np.ones(len(y)), index=y.index)
 
     if covs is not None:
-        filter_samples = ~(y.isna() | covs.isna().any(axis=1)) & y.index.isin(data.obs[sid_name].unique())
+        filter_samples = ~(y.isna() | covs.isna().any(axis=1)) & y.index.isin(adata.obs[sid_name].unique())
         if donorids is not None:
             print(
                 "WARNING: We currently do not account for multiple samples per donor "
@@ -204,10 +209,11 @@ def check_inputs(data, y, sid_name, batches, covs, donorids, allow_low_sample_si
                 "only minor differences in most cases, but we have not investigated it formally"
             )
     else:
-        filter_samples = ~np.isnan(y) & y.index.isin(data.obs[sid_name].unique())
+        filter_samples = ~np.isnan(y) & y.index.isin(adata.obs[sid_name].unique())
 
     N = filter_samples.sum()
-    if N < 10 and not allow_low_sample_size:
+    low_number_of_samples = 10
+    if N < low_number_of_samples and not allow_low_sample_size:
         msg = (
             "You are supplying phenotype information on fewer than 10 samples. This may lead to "
             "poor power at low sample sizes because our null distribution is one in which each "
@@ -222,19 +228,24 @@ def check_inputs(data, y, sid_name, batches, covs, donorids, allow_low_sample_si
 
 
 def compute_nam_and_reindex(
-    data: ad.AnnData,
+    adata: ad.AnnData,
     y: pd.Series,
     sid_name: str,
-    batches: pd.Series,
-    covs: pd.DataFrame,
-    donorids: None,
-    filter_samples: pd.Series,
-    nsteps: int,
-    show_progress: bool,
-    **kwargs
+    batches: pd.Series | None = None,
+    covs: pd.DataFrame | None = None,
+    donorids: pd.Series | None = None,
+    filter_samples: pd.Series | None = None,
+    nsteps: int | None = None,
+    **kwargs,
 ):
     # compute NAM
-    NAM, kept = nam(data, sid_name, batches=batches, nsteps=nsteps, show_progress=show_progress, **kwargs)
+    NAM, kept = nam(
+        adata=adata,
+        sid_name=sid_name,
+        batches=batches,
+        nsteps=nsteps,
+        **kwargs
+    )
     NAM = NAM.reindex(y.index)
 
     # filter samples and drop any columns that then have zero variance
@@ -255,19 +266,18 @@ def compute_nam_and_reindex(
 
 
 def association(
-    data,
-    y,
-    sid_name,
-    batches=None,
-    covs=None,
-    donorids=None,
-    ks=None,
-    key_added="coef",
-    max_frac_pcs=0.15,
-    nsteps=None,
-    show_progress=False,
-    allow_low_sample_size=False,
-    return_full=False,
+    adata: ad.AnnData,
+    y: pd.Series,
+    sid_name: str,
+    batches: pd.Series | None = None,
+    covs: pd.DataFrame | None = None,
+    donorids: pd.Series | None = None,
+    ks: int | None = None,
+    key_added: str = "coef",
+    max_frac_pcs: float = 0.15,
+    nsteps: int | None = None,
+    allow_low_sample_size: bool = False,
+    return_full: bool = False,
     ridges=None,
     add_to_adata: bool = True,
     **kwargs,
@@ -275,32 +285,72 @@ def association(
     """
     Parameters
     ----------
-    data : :class:`ad.AnnData`
-    y :
+    adata : :class:`ad.AnnData`
+        Dataset
+    y : :class:`pd.Series`
+        Sample-level variable (i.e clinical manifestation, phenotype, etc...) to calculate neighborhood association for
     sid_name : str
-    batches : pd.Series | list[int], default=None
-    covs : pd.Series | list[int], default=None
-    donorids : , default=None
-    ks: int, default=None
+        Name of the column in `adata.obs` indicating the sample ID for each observation.
+    batches : :class:`pd.Series`, optional
+        A Series with batches (as a numeric value, for some reason) as values and an index matching the ids in 
+        `adata.obs["sid_name"]`
+    covs : :class:`pd.DataFrame`, optional
+        Dataframe with covariates to control for. Gods help you if those covariate values are not numeric...
+    donorids : :class:`pd.Series`, optional
+        A Series with donorids (as a numeric value, for some reason) as values and an index matching the ids in 
+        `adata.obs["sid_name"]`. Used when multiple samples come from the same donor. Not sure yet if this is actually
+        used.
+    ks: int, optional
+        Number of principal components to use when calculating the NAM, I think.
     key_added : str, default="coef"
+        Name to give the columnns where the resulting correlation values and FDR are stored in `adata`.
+        FDR values will be added to "{key_added}_fdr". If `add_to_adata` is true, this is ignored.
     max_frac_pcs : float, default=0.15
-    nsteps=None
-    show_progress: bool, default=False
+        ?
+    nsteps: int, optional
+        ?
     allow_low_sample_size: bool, default=False
+        Allow fewer than 10 samples?
     return_full: bool, default=False
-    ridges , default=None
+        By default, `association` places the network assocation values in adata and returns just the minimum FDR.
+        If `return_full` is true, instead return the entire results dictionary with p values, fdrs, correlation values,
+        and more.
+    ridges , optional
+        No fuckin' idea
+    add_to_adata : bool, default=True
+        If true, write the correlation and associated FDR values be written to `adata`. Useful when running 
+        `association` in a parallelized loop since in those, the `adata` to which these are written is epherimal and
+        writing to the object takes time.
 
     Returns
     -------
+    If `return_full`:
+        dict[str, Any]
+    else:
+        float
     """
-    out = select_output(show_progress)
-
     # Check formats of inputs and figure out which samples have valid data
-    batches, filter_samples = check_inputs(data, y, sid_name, batches, covs, donorids, allow_low_sample_size)
+    batches, filter_samples = check_inputs(
+        adata=adata,
+        y=y,
+        sid_name=sid_name,
+        batches=batches,
+        covs=covs,
+        donorids=donorids,
+        allow_low_sample_size=allow_low_sample_size,
+    )
 
     # Compute NAM and filter to the appopriate samples and columns
     NAM, kept, batches, covs, donorids, filter_samples = compute_nam_and_reindex(
-        data, y, sid_name, batches, covs, donorids, filter_samples, nsteps, show_progress, **kwargs
+        adata=adata,
+        y=y,
+        sid_name=sid_name,
+        batches=batches,
+        covs=covs,
+        donorids=donorids,
+        filter_samples=filter_samples,
+        nsteps=nsteps,
+        **kwargs
     )
 
     # residualize NAM
@@ -315,10 +365,9 @@ def association(
         batches[filter_samples] if batches is not None else batches,
         npcs=npcs,
         ridges=ridges,
-        show_progress=show_progress,
     )
 
-    print("performing association test", file=out)
+    print("performing association test")
     res_ = _association(
         (res["namresid_sampleXpc"].values, res["namresid_svs"].values, res["namresid_nbhdXpc"].values),
         res["namresid"],
@@ -327,7 +376,6 @@ def association(
         y[filter_samples].values,
         batches[filter_samples].values,
         donorids[filter_samples].values if donorids is not None else None,
-        show_progress=show_progress,
         ks=ks,
         **kwargs,
     )
@@ -337,24 +385,26 @@ def association(
     res["kept"] = kept
 
     # store results at the neighborhood level
-    if key_added in data.obs:
+    if key_added in adata.obs:
         warnings.warn(f"Key '{key_added}' already exists in data.obs. Overwriting.", stacklevel=2)
     for x in [f"{key_added}", f"{key_added}_fdr"]:
-        if x in data.obs.columns:
-            data.obs.drop(columns=x, inplace=True)
+        if x in adata.obs.columns:
+            adata.obs.drop(columns=x, inplace=True)
 
     res["ncorrs"].name = key_added
 
     fdr_res = pd.Series(
-        data=[min_fdr_for_corr(_, res["fdrs"]["fdr"].to_numpy(), res["fdrs"]["threshold"].to_numpy()) for _ in res["ncorrs"]],
+        data=[
+            min_fdr_for_corr(_, res["fdrs"]["fdr"].to_numpy(), res["fdrs"]["threshold"].to_numpy())
+            for _ in res["ncorrs"]
+        ],
         index=res["ncorrs"].index,
         name=f"{key_added}_fdr",
     )
 
     if add_to_adata:
-        data.obs = data.obs.join([res["ncorrs"], fdr_res], how="left")
-        data.obs.fillna(value={f"{key_added}": 1, f"{key_added}_fdr": 1}, inplace=True)
-
+        adata.obs = adata.obs.join([res["ncorrs"], fdr_res], how="left")
+        adata.obs.fillna(value={f"{key_added}": 1, f"{key_added}_fdr": 1}, inplace=True)
 
     if return_full:
         res["fdr"] = fdr_res
@@ -362,6 +412,7 @@ def association(
         return res
     else:
         return res["p"]
+
 
 # compute local FDRs
 @njit(parallel=True)

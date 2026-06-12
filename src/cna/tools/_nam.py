@@ -1,74 +1,72 @@
 import gc
-
-# from argparse import Namespace
 from importlib import metadata
 from typing import Any
 
-import anndata
+import anndata as ad
 import numpy as np
 import pandas as pd
 import scipy.stats as st
+from loguru import logger
 from packaging import version
-import anndata as ad
-
-from ._out import select_output
 
 
-def get_connectivity(data):
+def get_connectivity(adata):
     av = metadata.version("anndata")
     if isinstance(av, str):
         av = version.parse(av)
     if av < version.parse("0.7.2"):
-        return data.uns["neighbors"]["connectivities"]
+        return adata.uns["neighbors"]["connectivities"]
     else:
-        return data.obsp["connectivities"]
+        return adata.obsp["connectivities"]
 
 
-def diffuse_stepwise(data, s, maxnsteps=15, show_progress=False, self_weight=1):
-    out = select_output(show_progress)
-
+def diffuse_stepwise(
+    adata: ad.AnnData,
+    s: pd.DataFrame,
+    maxnsteps:int=15,
+    self_weight:int=1
+    ):
     # find connectivity matrix
-    a = get_connectivity(data)
+    a = get_connectivity(adata)
 
     # normalize
     colsums = np.array(a.sum(axis=0)).flatten() + self_weight
 
     # do diffusion
     for i in range(maxnsteps):
-        print("\ttaking step", i + 1, file=out)
+        logger.info(f"taking step{i + 1}")
         s = a.dot(s / colsums[:, None]) + self_weight * s / colsums[:, None]
         yield s
 
 
-def diffuse(data, s, nsteps, show_progress=False, self_weight=1):
-    for _s in diffuse_stepwise(data, s, maxnsteps=nsteps, show_progress=show_progress, self_weight=self_weight):
+def diffuse(adata, s, nsteps, self_weight=1):
+    for _s in diffuse_stepwise(adata, s, maxnsteps=nsteps, self_weight=self_weight):
         pass
     return s
 
 
 # creates a neighborhood abundance matrix
-def _nam(data, sid_name, sids=None, nsteps=None, maxnsteps=15, self_weight=1, show_progress=False):
-    out = select_output(show_progress)
+def _nam(adata, sid_name, sids=None, nsteps=None, maxnsteps=15, self_weight=1,):
 
     def R(A, B):
         return ((A - A.mean(axis=0)) * (B - B.mean(axis=0))).mean(axis=0) / A.std(axis=0) / B.std(axis=0)
 
-    S = pd.get_dummies(data.obs[sid_name])
+    S = pd.get_dummies(adata.obs[sid_name])
     if sids is not None:
         S = S[sids]
     C = S.sum(axis=0)
 
     prevmedkurt = np.inf
     old_s = np.zeros(S.shape)
-    for i, s in enumerate(diffuse_stepwise(data, S, self_weight=self_weight, maxnsteps=maxnsteps)):
+    for i, s in enumerate(diffuse_stepwise(adata, S, self_weight=self_weight, maxnsteps=maxnsteps)):
         medkurt = np.median(st.kurtosis(s / C, axis=1))
         R2 = R(s, old_s) ** 2
         old_s = s
-        print("\tmedian kurtosis:", medkurt + 3, file=out)
-        print("\t20th percentile R2(t,t-1):", np.percentile(R2, 20), file=out)
+        logger.info(f"median kurtosis: {medkurt + 3}")
+        logger.info(f"20th percentile R2(t,t-1): {np.percentile(R2, 20)}")
         if nsteps is None:
             if prevmedkurt - medkurt < 3 and i + 1 >= 3:
-                print("stopping after", i + 1, "steps", file=out)
+                logger.info(f"stopping after {i + 1} steps")
                 break
             prevmedkurt = medkurt
         elif i + 1 == nsteps:
@@ -87,18 +85,16 @@ def _batch_kurtosis(NAM, batches):
 
 
 # qcs a NAM to remove neighborhoods that are batchy
-def _qc_nam(NAM, batches, show_progress=False):
-    out = select_output(show_progress)
-
+def _qc_nam(NAM, batches):
     if len(np.unique(batches)) == 1:
         keep = np.repeat(True, len(NAM.T))
         return NAM, keep
 
     kurtoses = _batch_kurtosis(NAM, batches)
     threshold = max(6, 2 * np.median(kurtoses))
-    print("throwing out neighborhoods with batch kurtosis >=", threshold, file=out)
+    logger.info(f"throwing out neighborhoods with batch kurtosis >={threshold}")
     keep = kurtoses < threshold
-    print("keeping", keep.sum(), "neighborhoods", file=out)
+    logger.info(f"keeping {keep.sum()} neighborhoods")
 
     return NAM.iloc[:, keep], keep
 
@@ -118,9 +114,7 @@ def svd_nam(NAM):
 
 
 # residualizes covariates and batch information out of NAM
-def _resid_nam(NAM, covs, batches, ridges=None, npcs=None, show_progress=False) -> dict[str, Any]:
-    out = select_output(show_progress)
-
+def _resid_nam(NAM, covs, batches, ridges=None, npcs=None,) -> dict[str, Any]:
     N = len(NAM)
     NAM_ = NAM - NAM.mean(axis=0)
     if covs is None:
@@ -152,7 +146,7 @@ def _resid_nam(NAM, covs, batches, ridges=None, npcs=None, show_progress=False) 
 
             kurtoses = _batch_kurtosis(tempNAM, batches)
 
-            print("\twith ridge", ridge, "median batch kurtosis = ", np.median(kurtoses), file=out)
+            logger.info(f"with ridge {ridge} median batch kurtosis = {np.median(kurtoses)}")
 
             if np.median(kurtoses) <= 6:
                 break
@@ -183,32 +177,20 @@ def _resid_nam(NAM, covs, batches, ridges=None, npcs=None, show_progress=False) 
 
 
 def nam(
-    data: ad.AnnData,
+    adata: ad.AnnData,
     sid_name: str,
-    batches: pd.DataFrame | None = None,
+    batches: pd.Series | None = None,
     nsteps: int | None = None,
     self_weight: int = 1,
-    max_frac_pcs: float = 0.15,
-    suffix: str = "",
-    ks: int | None = None,
-    show_progress: bool = False,
     **kwargs,
-):
-    out = select_output(show_progress)
-
+) -> pd.DataFrame:
     # ensure batches are properly formatted and initialized
     if batches is None:
-        batches = pd.Series(np.ones(len(data.obs[sid_name].unique())), index=data.obs[sid_name].unique())
+        batches = pd.Series(np.ones(len(adata.obs[sid_name].unique())), index=adata.obs[sid_name].unique())
 
     # compute and QC NAM
-    print("computing NAM", file=out)
-    NAM = _nam(
-        data=data,
-        sid_name=sid_name,
-        nsteps=nsteps,
-        self_weight=self_weight,
-        show_progress=show_progress
-    )
-    NAMqc, keep = _qc_nam(NAM, batches, show_progress=show_progress)
+    logger.info("computing NAM")
+    NAM = _nam(adata=adata, sid_name=sid_name, nsteps=nsteps, self_weight=self_weight,)
+    NAMqc, keep = _qc_nam(NAM, batches)
 
     return pd.DataFrame(NAMqc, index=NAM.index, columns=NAM.columns[keep], dtype=float), keep

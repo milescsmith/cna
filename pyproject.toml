@@ -4,7 +4,7 @@ build-backend = "uv_build"
 
 [project]
 name = "cna"
-version = "0.5.4"
+version = "0.6.0"
 authors = [
     { name = "Yakir Reshef", email = "yreshef@broadinstitute.org" },
     { name = "Laurie Rumker", email = "lrumker@broadinstitute.org" }
@@ -26,6 +26,7 @@ dependencies = [
     "matplotlib>=3.1.3",
     "scanpy>=1.10",
     "numba>=0.65.1",
+    "loguru>=0.7.3",
 ]
 
 [project.urls]
